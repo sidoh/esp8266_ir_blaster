@@ -4,6 +4,8 @@
 #include <ESP8266WebServer.h>
 #include <IrHelper.h>
 #include <Settings.h>
+#include <ArduinoJson.h>
+#include <StringStream.h>
 
 ESP8266WebServer server(80);
 
@@ -16,6 +18,74 @@ decode_results results;
 void setup() {
   Serial.begin(115200);
   wifiManager.autoConnect();
+  
+  server.on("/", HTTP_GET, [](){
+    String body = "<html><head><title>IR Server</title></head>";
+    body += "<body>";
+    body += "<form method='post' action='/ir'>";
+    body += "<h5>Type</h5>";
+    body += "<div><input type='radio' name='type' value='sony' /> Sony</div>";
+    body += "<div><input type='radio' name='type' value='raw' /> Raw</div>";
+    body += "<h5>Code</h5>";
+    body += "<textarea rows='3' cols='80' style='font-family: courier new, courier, mono;'></textarea>";
+    body += "<input type='submit' />";
+    body += "</form></body></html>";
+    
+    server.send(200, "text/html", body);
+  });
+  
+  server.on("/ir", HTTP_POST, []() {
+    StaticJsonBuffer<1024> buffer;
+    JsonObject& request = buffer.parse(server.arg("plain"));
+    
+    if (!request.size()) {
+      server.send(400, "text/plain", "Invalid JSON: " + server.arg("plain"));
+    } else {
+      if (request["type"] == "sony") {
+        for (int i = 0; i < 3; i++) {
+          irsend.sendSony(request["data"], request["num_bits"]);
+          delay(40);
+          yield();
+        }
+    
+        server.send(200, "text/plain", server.arg("plain"));
+      } else if (request["type"] == "raw") {
+        JsonArray& data = request["data"];
+        unsigned int * buffer = new unsigned int[data.size()];
+        data.copyTo(buffer, data.size());
+        unsigned int pwmFrequency = request["pwm_frequency"];
+        
+        irsend.sendRaw(buffer, data.size(), pwmFrequency);
+        
+        String response = "With data: [";
+        for (int i = 0; i < data.size(); i++) {
+          response += buffer[i];
+          response += ",";
+        }
+        response += "]\n";
+        response += "size: " + String(data.size()) + "\n";
+        response += "freq: " + String(pwmFrequency);
+        
+        server.send(200, "text/plain", response);
+      }
+    }
+  });
+  
+  server.on("/ir", HTTP_GET, []() {
+    while (!irrecv.decode(&results)) {
+      yield();
+    }
+    
+    String buffer = "";
+    StringStream stream(buffer);
+    
+    dumpInfo(&results, stream);
+    dumpRaw(&results, stream);
+    dumpCode(&results, stream);
+    
+    server.send(200, "text/plain", buffer);
+    irrecv.resume();
+  });
   
   server.on("/update", HTTP_POST, [](){
     server.sendHeader("Connection", "close");
@@ -52,71 +122,7 @@ void setup() {
   irrecv.enableIRIn();
 }
   
-  // unsigned int  rawData[46] = {1850,700, 1800,1950, 600,1900, 600,700, 1850,650, 1900,650, 1850,1950, 550,700, 1850,1950, 600,1950, 600,700, 1850,700, 1850,700, 1850,1900, 600,700, 1850,650, 1850,1950, 600,1950, 600,700, 1850,700, 1850,650, 1900,1950, 600,700 };  // UNKNOWN 38949E4C
-  
-  bool send = false;
-  bool recv = true;
-  
 void loop() {
-  server.handleClient();
-  
-  if (recv) {
-    if (irrecv.decode(&results)) {
-      dumpInfo(&results, client);           // Output the results
-      dumpRaw(&results, client);            // Output the results in RAW format
-      dumpCode(&results, client);           // Output the results as source code
-      client.println("");           // Blank line between entries
-      irrecv.resume();
-      irrecv.disableIRIn();
-      recv = false;
-      send = true;
-    }
-  }
-  
-  if (send) {
-    client.println("Trying to re-send packet of length: " + String(results.rawlen) + " in...");
-    
-    for (int i = 3; i >= 1; i--) {
-      client.print(i);
-      client.println("...");
-      delay(1000);
-    }
-    
-    client.println("Sending!");
-  
-    unsigned int * rawData = new unsigned int[results.rawlen];
-    
-    for (int i = 0; i < results.rawlen; i++) {
-      rawData[i] = results.rawbuf[i]*USECPERTICK;
-      client.print(rawData[i]);
-      client.print(" ");
-    }
-    
-    client.println();
-    client.println("Data constructed");
-    
-    irsend.sendRaw(rawData, results.rawlen, 38);
-    // delay(40);
-    // irsend.sendRaw(rawData, results.rawlen-1, 38);
-    
-    client.println("Sent!");
-    
-    delete rawData;
-    
-    send = false;
-    recv = true;
-    irrecv.enableIRIn();
-  }
-  
-  // delay(1000);
-  // client.println("Trying to send sony...");
-  // irsend.sendSony(0xA90,12);
-  // delay(40);
-  // irsend.sendSony(0xA90,12);
-  // delay(40);
-  // irsend.sendSony(0xA90,12);
-    
-  client.flush();
   server.handleClient();
   yield();
 }
