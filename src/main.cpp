@@ -19,15 +19,18 @@ IRsend irsend(IR_SEND_GPIO);
 decode_results results;
 Settings settings;
 
-void requireAuthentication() {
+bool isAuthenticated() {
   String username = settings.adminUsername;
   String password = settings.adminPassword;
   
   if (username && password && username.length() > 0 && password.length() > 0) {
     if (!server.authenticate(username.c_str(), password.c_str())) {
       server.requestAuthentication();
+      return false;
     }
   }
+  
+  return true;
 }
 
 void setup() {
@@ -46,46 +49,46 @@ void setup() {
   server.collectHeaders(headers, sizeof(headers)/sizeof(char*));
   
   server.on("/", HTTP_GET, []() {
-    requireAuthentication();
-    
-    String body = "<html>";
-    body += "<body>";
-    body += "<h1>ESP8266 - ";
-    body += String(ESP.getChipId(), HEX);
-    body += "</h1>";
-    body += "<h3>Settings</h3>";
-    
-    body += "<form method='post' action='/settings'>";
-    body += "<div>";
-    body += "<textarea name='settings' rows='20' cols='80' style='font-family: courier new, courier, mono;'>";
-    body += settings.toJson();
-    body += "</textarea>";
-    body += "</div>";
-    body += "<p><input type='submit'/></p></form>";
-    
-    body += "<h3>Update Firmware</h3>";
-    body += "<form method='post' action='/update' enctype='multipart/form-data'>";
-    body += "<input type='file' name='update'><input type='submit' value='Update'></form>";
-    
-    body += "</body></html>";
-    
-    server.send(
-      200,
-      "text/html",
-      body
-    );
+    if (isAuthenticated()) {
+      String body = "<html>";
+      body += "<body>";
+      body += "<h1>ESP8266 - ";
+      body += String(ESP.getChipId(), HEX);
+      body += "</h1>";
+      body += "<h3>Settings</h3>";
+      
+      body += "<form method='post' action='/settings'>";
+      body += "<div>";
+      body += "<textarea name='settings' rows='20' cols='80' style='font-family: courier new, courier, mono;'>";
+      body += settings.toJson();
+      body += "</textarea>";
+      body += "</div>";
+      body += "<p><input type='submit'/></p></form>";
+      
+      body += "<h3>Update Firmware</h3>";
+      body += "<form method='post' action='/update' enctype='multipart/form-data'>";
+      body += "<input type='file' name='update'><input type='submit' value='Update'></form>";
+      
+      body += "</body></html>";
+      
+      server.send(
+        200,
+        "text/html",
+        body
+      );
+    }
   });
   
   server.on("/settings", HTTP_POST, []() {
-    requireAuthentication();
-    
-    Settings::deserialize(settings, server.arg("settings"));
-    settings.save();
-    
-    server.sendHeader("Location", "/");
-    server.send(302, "text/plain");
-    
-    ESP.restart();
+    if (isAuthenticated()) {
+      Settings::deserialize(settings, server.arg("settings"));
+      settings.save();
+      
+      server.sendHeader("Location", "/");
+      server.send(302, "text/plain");
+      
+      ESP.restart();
+    }
   });
   
   server.on("/ir", HTTP_POST, []() {
@@ -157,33 +160,35 @@ void setup() {
   });
   
   server.on("/update", HTTP_POST, [](){
-    requireAuthentication();
-    
-    server.sendHeader("Connection", "close");
-    server.sendHeader("Access-Control-Allow-Origin", "*");
-    server.send(200, "text/plain", (Update.hasError())?"FAIL":"OK");
-    ESP.restart();
+    if (isAuthenticated()) {
+      server.sendHeader("Connection", "close");
+      server.sendHeader("Access-Control-Allow-Origin", "*");
+      server.send(200, "text/plain", (Update.hasError())?"FAIL":"OK");
+      ESP.restart();
+    }
   },[](){
-    HTTPUpload& upload = server.upload();
-    if(upload.status == UPLOAD_FILE_START){
-      Serial.setDebugOutput(true);
-      WiFiUDP::stopAll();
-      Serial.printf("Update: %s\n", upload.filename.c_str());
-      uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
-      if(!Update.begin(maxSketchSpace)){//start with max available size
-        Update.printError(Serial);
+    if (isAuthenticated()) {
+      HTTPUpload& upload = server.upload();
+      if(upload.status == UPLOAD_FILE_START){
+        Serial.setDebugOutput(true);
+        WiFiUDP::stopAll();
+        Serial.printf("Update: %s\n", upload.filename.c_str());
+        uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
+        if(!Update.begin(maxSketchSpace)){//start with max available size
+          Update.printError(Serial);
+        }
+      } else if(upload.status == UPLOAD_FILE_WRITE){
+        if(Update.write(upload.buf, upload.currentSize) != upload.currentSize){
+          Update.printError(Serial);
+        }
+      } else if(upload.status == UPLOAD_FILE_END){
+        if(Update.end(true)){ //true to set the size to the current progress
+          Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+        } else {
+          Update.printError(Serial);
+        }
+        Serial.setDebugOutput(false);
       }
-    } else if(upload.status == UPLOAD_FILE_WRITE){
-      if(Update.write(upload.buf, upload.currentSize) != upload.currentSize){
-        Update.printError(Serial);
-      }
-    } else if(upload.status == UPLOAD_FILE_END){
-      if(Update.end(true)){ //true to set the size to the current progress
-        Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
-      } else {
-        Update.printError(Serial);
-      }
-      Serial.setDebugOutput(false);
     }
     yield();
   });
