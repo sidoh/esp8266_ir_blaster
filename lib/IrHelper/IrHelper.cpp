@@ -1,3 +1,7 @@
+/**
+ * Taken from https://github.com/markszabo/IRremoteESP8266
+ */
+ 
 #include <Arduino.h>
 #include <IRremoteESP8266.h>
 #include <IrHelper.h>
