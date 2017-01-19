@@ -1,3 +1,7 @@
+/*
+ * Adapated from https://gist.github.com/cmaglie/5883185
+ */
+ 
 #ifndef _STRING_STREAM_H_INCLUDED_
 #define _STRING_STREAM_H_INCLUDED_
 
