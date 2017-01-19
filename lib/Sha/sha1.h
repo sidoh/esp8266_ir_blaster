@@ -1,3 +1,7 @@
+/*
+ * Adapted from: https://github.com/Cathedrow/Cryptosuite
+ */
+ 
 #ifndef Sha1_h
 #define Sha1_h
 
