@@ -115,7 +115,7 @@ void setup() {
     }
     
     if (validationPassed) {
-      StaticJsonBuffer<1024> buffer;
+      StaticJsonBuffer<SETTINGS_SIZE> buffer;
       JsonObject& request = buffer.parse(server.arg("plain"));
       
       if (!request.size()) {
