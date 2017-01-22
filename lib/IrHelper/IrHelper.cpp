@@ -50,6 +50,9 @@ void dumpInfo(decode_results *results, Stream& client) {
   client.print(" (");
   client.print(results->bits, DEC);
   client.println(" bits)");
+  
+  client.print("Lead      : ");
+  client.println(String(results->rawbuf[0]*USECPERTICK));
 }
 
 void dumpRaw(decode_results *results, Stream& client) {
