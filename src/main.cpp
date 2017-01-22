@@ -23,7 +23,7 @@ bool isAuthenticated() {
   String username = settings.adminUsername;
   String password = settings.adminPassword;
   
-  if (username && password && username.length() > 0 && password.length() > 0) {
+  if (settings.enableSecurity && username && password && username.length() > 0 && password.length() > 0) {
     if (!server.authenticate(username.c_str(), password.c_str())) {
       server.requestAuthentication();
       return false;
@@ -95,7 +95,7 @@ void setup() {
     String body = server.arg("plain");
     bool validationPassed = true;
     
-    if (settings.hmacSecret && settings.hmacSecret.length() > 0) {
+    if (settings.enableSecurity && settings.hmacSecret && settings.hmacSecret.length() > 0) {
       time_t timestamp = server.header("X-Signature-Timestamp").toInt();
       String signature = server.header("X-Signature");
       String computedSignature = requestSignature(
@@ -138,6 +138,8 @@ void setup() {
           irsend.sendRaw(buffer, data.size(), pwmFrequency);
           
           server.send(200, "text/plain", "true");
+          
+          delete buffer;
         }
       }
     }

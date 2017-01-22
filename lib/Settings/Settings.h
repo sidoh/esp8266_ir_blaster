@@ -16,7 +16,8 @@ public:
   Settings() :
     hmacSecret(""),
     adminUsername("admin"),
-    adminPassword("esp8266")
+    adminPassword("esp8266"),
+    enableSecurity(true)
   { }
 
   static void deserialize(Settings& settings, String json);
@@ -29,6 +30,8 @@ public:
   String hmacSecret;
   String adminUsername;
   String adminPassword;
+  
+  bool enableSecurity;
 };
 
 #endif 

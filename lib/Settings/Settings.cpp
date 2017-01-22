@@ -10,6 +10,7 @@ void Settings::deserialize(Settings& settings, String json) {
   settings.hmacSecret = parsedSettings.get<String>("hmac_secret");
   settings.adminUsername = parsedSettings.get<String>("admin_username");
   settings.adminPassword = parsedSettings.get<String>("admin_password");
+  settings.enableSecurity = parsedSettings["enable_security"];
 }
 
 void Settings::load(Settings& settings) {
@@ -49,6 +50,7 @@ void Settings::serialize(Stream& stream, const bool prettyPrint) {
   root["hmac_secret"] = this->hmacSecret;
   root["admin_username"] = this->adminUsername;
   root["admin_password"] = this->adminPassword;
+  root["enable_security"] = this->enableSecurity;
   
   if (prettyPrint) {
     root.prettyPrintTo(stream);
